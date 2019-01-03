@@ -1,0 +1,50 @@
+MP3 Group 30 BUG LOG
+
+FORMAT:
+(Bug #)
+	-Solution
+
+1) QEMU crashing with “This program has stopped responding” every time we ran test_debug after compiling successfully.
+	-Realized we were sending keyboard_port (0x60) in send_eoi instead of the keyboard IRQ value which was completely wrong
+	-Fixed by replacing keyboard_port (0x60) with keyboard_irq (0x1)
+
+2) After a few keypresses displaying correctly in terminal, any additional keypresses would throw random exceptions displaying to the screen.
+	-Fixed by adding cli(), disable_irq(1), enable_irq(1) and sti() in that order to our keyboard handler function
+	
+3) Keypresses were still being displayed to terminal even after an exception was thrown.
+	-Fixed by changing reserved[0] bit to 0 instead of 1
+	
+4) Running into Triple Fault problem when testing IDT
+	-Fixed by properly setting present bit to 0 in general but setting present bit to 1 for the keyboard entry and all other entries under 32 for the idt.
+	
+5) During testing for Checkpoint 2 keys would only be displayed as uppercase when caps lock was toggled on AND shift was pressed.
+	-Issue came from an if statement at the beginning of the keyboard logic where we were checking if either of the flags was not one then we would put them to the buffer. Changing it to an and statement checking if both were 0 fixed the issue.
+6) Our function init_paging() was causing the OS to crash.
+	-This came from having the kernel bits set improperly, the global bit was being set when it didn’t need to be. Once the bits were set to 0x400083 the crashing stopped. 
+	
+7) Shift was getting put to the screen as space when it shouldn’t be getting displayed at all.
+	-Solved by altering the conditional statements that said if the scancode was not right shift OR left shift to be not right shift AND not left shift statements.
+	
+8) ALT was getting put to the screen as space, similar to shift.
+	-It turned out that the hex value we had for the alt scancode was off by 30ish switching it to the correct value, 0x38, fixed the issues.
+
+9) Scrolling was adding an extra line when we hit the end of the terminal screen.
+	-Fixed it by removing an extra screen_y increment.
+
+10)Video memory storing and restoring only worked correctly for terminal 1. Switching to terminal 2 and 3 would result in blank screens.
+	-The allocated memory space for each terminal’s video memory to be stored was 4MB instead of 4KB. Using 4KB resolved the bug.
+
+11) Backspace was initially able to overwrite the prompt for shell.
+	-Adding a check for the screen_x position allows us to not rewrite the prompt.
+
+12) Execute would not work on commands with no space at the end
+	-Fixed by NULL-terminating at the end of the command
+
+13) File_read was infinitely printing contents
+	-Needed to update file position and check if file position exceeded file size
+
+14) Page Fault when exiting base shell
+	-Add check in sys_halt() for if process is one of the base ones. If so, relaunch shell instead.
+
+15) Segment not Present exception when testing PIT
+	-Fix IDT entry so that idt[32].present is set to 1. Was 0 before
